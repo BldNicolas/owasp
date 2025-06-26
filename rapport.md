@@ -69,7 +69,7 @@ Résultats pour : {{ searchQueryRaw }}
 ### 3.4 TODO Préparer les requêtes SQL
 
 ### 3.5 Broken Access Control 
-**3.4.1 Modifications et suppressions d'articles**
+**3.5.1 Modifications et suppressions d'articles**
 - **Localisation :**  `backend/src/controllers/articles.ts`
 - **Preuve de concept :**
     1.	L’utilisateur A (id = 1) se connecte et récupère un token/session.
@@ -96,7 +96,7 @@ if (!article || article.authorId !== userId) {
 ```
 
 ---
-**3.4.2 Accès à la route listAll()**
+**3.5.2 Accès à la route listAll()**
 - **Localisation :**  `backend/src/controllers/articles.ts`
 - **Preuve de concept :**
     1.	Un utilisateur connecté (non admin) appelle `/articles/all`.
@@ -109,6 +109,24 @@ if (!article || article.authorId !== userId) {
 if (!user || user.role !== 'admin') {
   return res.sendStatus(403);
 }
+```
+
+---
+### 3.6 Exposition excessive d'informations
+- **Localisation :**  `backend/src/controllers/auth.ts` et `backend/src/controllers/articles.ts`
+- **Preuve de concept :**
+  1. Lors de l’appel à /login ou /me, l’API retourne un objet contenant tous les champs 
+  de la table users, y compris le mot de passe hashé.
+  2. Un attaquant ayant accès à la session pourrait exploiter cette information pour
+  tenter des attaques hors ligne
+  3. La même chose se produit sur les articles, où on peut récupérer des infos tels 
+  que le userId.
+- **Cause :**  
+    - Absence de filtrage des champs sensibles dans les réponses JSON.
+- **Remédiation :**  
+    - Ne retourner que les champs nécessaires au fonctionnement de l’application :
+```ts
+res.json({ id: user.id, username: user.username, role: user.role });
 ```
 
 ---

@@ -48,7 +48,11 @@ export async function get(req: Request, res: Response): Promise<any> {
   );
   if (!article) return res.sendStatus(404)
   console.log("get");
-  res.json(article);
+  res.json({
+    id: article.id,
+    title: article.title,
+    content: article.content
+  });
 }
 
 

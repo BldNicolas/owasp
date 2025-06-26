@@ -35,7 +35,7 @@ export async function login(req: Request, res: Response): Promise<any> {
   if (!isPasswordValid)
      return res.status(401).json({ error: "Invalid password" });
   req.session.user = { id: user.id, role: user.role };
-  res.json(user);
+  res.json({ id: user.id, username: user.username, role: user.role });
 }
 
 // Déconnexion
@@ -48,5 +48,5 @@ export async function me(req: Request, res: Response): Promise<any> {
   const userId = req.session.user!.id
   const user = await db.get(`SELECT * FROM users WHERE id = ?`, userId);
   if (!user) return res.status(401).json({ error: 'Not authenticated' });
-  res.json(user);
+  res.json({ id: user.id, username: user.username, role: user.role });
 }
