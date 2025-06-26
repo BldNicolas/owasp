@@ -1,216 +1,219 @@
-
-# TP Rapport de Recherche de Vulnérabilités et Remédiations
-
-  
+# Rapport de Recherche de Vulnérabilités et Remédiations
 
 ## 1. Informations Générales
 
--  **Nom / Binôme :** Berlaud Nicolas / Fages Théo
+* **Nom / Binôme :** Berlaud Nicolas / Fages Théo
 
--  **Date :** 26/05/2025
-
-  
+* **Date :** 26/05/2025
 
 ---
-
-  
 
 ## 2. Méthodologie
 
--  **Analyse statique :**
+La méthodologie adoptée pour cet audit combine des analyses statiques et dynamiques afin d'obtenir une couverture maximale.
 
-- Lecture rapide du code backend (TypeScript) et frontend (Vue).
+* **Analyse Statique :**
 
-- Repérage des zones sensibles (concatenation SQL, routes sans validation, gestion des sessions, etc.).
+  * Lecture et revue du code source du backend (TypeScript) et du frontend (Vue.js).
 
-- ...
+  * Identification des zones de code sensibles : concaténations dans les requêtes SQL, routes d'API sans validation des entrées, gestion des sessions et des cookies, utilisation de fonctions potentiellement dangereuses (`v-html`).
 
--  **Tests dynamiques :**
+* **Tests Dynamiques :**
 
-- Requêtes manuelles avec cURL / Postman / navigateur / Burp Suite.
+  * Envoi de requêtes manuelles à l'aide d'outils comme cURL, Postman, et les outils de développement du navigateur.
 
-- Tentatives d’injection (SQL, paramètre URL, ...) avec quels outils (ex: sqlmap)
+  * Utilisation de Burp Suite pour intercepter, analyser et modifier les requêtes HTTP.
 
-- Contrôle d'accès avec simulation de rôles (admin vs user).
+  * Tentatives d'injection (SQL, XSS) avec des charges utiles manuelles et des outils automatisés comme `sqlmap`.
 
-- Vérification des en-têtes (cookies, CORS).
+  * Tests de contrôle d'accès en simulant des sessions avec différents rôles (administrateur vs. utilisateur simple).
 
-- ...
+  * Vérification des en-têtes de sécurité HTTP (CORS, Cookies, etc.).
 
-  
+---
 
 ## 3. Vulnérabilités Identifiées
 
-  
+### 3.1. Injection SQL via les paramètres d'URL
 
-### 3.1. Hashage du mot de passe
+* **Localisation :** Route API récupérant les articles (`/api/articles/:id`).
 
-  
+* **Preuve de Concept (PoC) :**
+  L'URL suivante permet de contourner la logique de sélection et de récupérer le premier article de la base, quel que soit son `id` ou son `authorId` :
+  `http://localhost:3000/api/articles/0' OR '1'='1`
 
-### 3.2 XSS (cross-site scripting) sur le champ de recherche
+* **Cause :**
+  La requête SQL est construite par concaténation directe de l'entrée utilisateur (`articleId`) sans aucun échappement ni validation. Cela permet à un attaquant d'injecter du code SQL malveillant.
 
--  **Localisation :**  `frontend/src/views/Home.vue`
+* **Remédiation :**
+  Il est impératif d'utiliser des **requêtes préparées** (prepared statements) avec des paramètres. Cette méthode sépare le code SQL des données, empêchant toute injection.
 
--  **Preuve de concept :**
+  **Exemple de correction :**
 
-1. Sur `http://localhost:8080` dans le champ de recherche
-
-2. On met : `<a href="#" onmouseover="alert('XSS')">Survole-moi</a>`
-
-3. Si on survole la balise <a> qui a été crée, le script se lance.
-
--  **Cause :**
-
-- Utilisation de v-html dans Vue.js pour injecter dynamiquement du HTML dans le DOM, sans nettoyage ni échappement des données utilisateur.
-
-- L’entrée n’est pas désinfectée avant son affichage, permettant l’exécution de scripts malveillants.
-
--  **Remédiation :**
-
-- Supprimer l’usage de v-html pour cette donnée dynamique.
-
-- Rempalcer par une interpolation classique sécurisée avec {{  }} qui échappe automatiquement le contenu :
-
-```vue
-
-<p  v-if="searchQueryRaw">
-
-Résultats pour : {{ searchQueryRaw }}
-
-</p>
-
-```
-
-- Ne jamais utiliser v-html avec des entrées utilisateur, sauf si le contenu est filtré via une bibliothèque de sanitization comme DOMPurify.
-
- 
----
-
-Ici nous pouvons voir que le code ne hash pas le mot de passe ce qui n'est pas une bonne pratique de sécurité
-
-```json
-export async function register(req: Request, res: Response): Promise<any> {
-  const { username, password } = req.body;
-  await db.run(
-    `INSERT INTO users (username, password, role) VALUES (?, ?, 'user')`,
-    username,
-    password
+  ```typescript
+  // Récupère l'article en utilisant des paramètres bindés (?)
+  const article = await db.get(
+      "SELECT * FROM articles WHERE id = ? AND authorId = ?",
+      articleId,
+      userId
   );
-  res.status(201).json({ message: 'User registered' });
-}
-```
-voici comme résoudre ce problème
+  ```
 
-```json
+### 3.2. Cross-Site Scripting (XSS) sur le champ de recherche
 
-export async function register(req: Request, res: Response): Promise<any> {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required' });
-  }
-  try {
-    const hashedPassword = await bcrypt.hash(password, 10);
+* **Localisation :** `frontend/src/views/Home.vue`
+
+* **Preuve de Concept (PoC) :**
+
+  1. Naviguer sur `http://localhost:8080`.
+
+  2. Dans le champ de recherche, injecter le code HTML suivant : `<a href="#" onmouseover="alert('XSS PoC')">Survole-moi</a>`
+
+  3. Le survol du lien généré dans la page de résultats exécute le script JavaScript.
+
+* **Cause :**
+  L'application utilise la directive `v-html` de Vue.js pour afficher les termes de la recherche. Cette directive interprète la chaîne de caractères comme du HTML brut, ce qui permet l'exécution de scripts si l'entrée utilisateur n'est pas préalablement nettoyée (sanitized).
+
+* **Remédiation :**
+  Remplacer l'usage de `v-html` par l'interpolation standard `{{ variable }}` qui échappe automatiquement les caractères spéciaux et neutralise toute tentative d'injection de balises HTML ou de scripts.
+
+  **Exemple de correction :**
+
+  ```vue
+  <p v-if="searchQueryRaw">
+    <!-- L'interpolation {{ }} garantit que la donnée est traitée comme du texte brut -->
+    Résultats pour : {{ searchQueryRaw }}
+  </p>
+  ```
+
+  Si l'affichage de HTML riche est absolument nécessaire, utilisez une bibliothèque de "sanitization" comme **DOMPurify** pour filtrer le contenu avant de l'injecter.
+
+### 3.3. Stockage des mots de passe en clair
+
+* **Localisation :** Fonction d'inscription (`register`).
+
+* **Cause :**
+  Le mot de passe fourni par l'utilisateur est inséré directement dans la base de données sans aucune transformation. En cas de fuite de données, tous les mots de passe des utilisateurs seraient exposés.
+
+  **Code vulnérable :**
+
+  ```typescript
+  export async function register(req: Request, res: Response): Promise<any> {
+    const { username, password } = req.body;
+    // Le mot de passe est inséré en clair
     await db.run(
       `INSERT INTO users (username, password, role) VALUES (?, ?, 'user')`,
       username,
-      hashedPassword
+      password
     );
     res.status(201).json({ message: 'User registered' });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
   }
-}
+  ```
 
-```
+* **Remédiation :**
+  Il faut **hasher** les mots de passe à l'aide d'un algorithme robuste et lent comme **bcrypt** ou **Argon2**. Le hash, et non le mot de passe, est ensuite stocké en base de données.
 
-## Faille importe
+  **Exemple de correction avec `bcrypt` :**
 
-```bash
-app.use(session({
-    store: new SQLiteStore({
-        db: 'sessions.db',
-        dir: './data',
-        expires: 1 * 60 * 60, // 1 heure
+  ```typescript
+  import * as bcrypt from 'bcrypt';
+  
+  export async function register(req: Request, res: Response): Promise<any> {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+    try {
+      // Hasher le mot de passe avec un coût de 10
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await db.run(
+        `INSERT INTO users (username, password, role) VALUES (?, ?, 'user')`,
+        username,
+        hashedPassword
+      );
+      res.status(201).json({ message: 'User registered' });
+    } catch (error) {
+      console.error('Registration error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+  ```
 
-    }),
-    secret: 'secret-key',
-    resave: false,
-    saveUninitialized: false,
-    name: 'session',
-}));
-```
+### 3.4. Clé secrète de session prédictible
 
-on ne pas mettre secret-key comme ca 
+* **Localisation :** Configuration du middleware `express-session`.
 
+* **Cause :**
+  La clé secrète (`secret`) utilisée pour signer les cookies de session est une chaîne de caractères faible et codée en dur (`'secret-key'`). Une clé prédictible permet à un attaquant de forger des identifiants de session valides.
 
-```bash
-app.use(session({
-    store: new SQLiteStore({
-        db: 'sessions.db',
-        dir: './data',
-        expires: 1 * 60 * 60, // 1 heure
+  **Code vulnérable :**
 
-    }),
-    secret: process.env.secret,
-    resave: false,
-    saveUninitialized: false,
-    name: 'session',
-}));
-```
-## Injection SQL 
-`localhost:3000/api/articles/0' OR '1'='1`
+  ```javascript
+  app.use(session({
+      // ...
+      secret: 'secret-key', // Clé faible et codée en dur
+      resave: false,
+      saveUninitialized: false,
+  }));
+  ```
 
-```json
-{
-  "id": 1,
-  "authorId": 2,
-  "title": "Comment j'ai découvert Node.js",
-  "content": "Lorsque j'ai commencé le développement web, je n'avais jamais utilisé JavaScript côté serveur. \nEn explorant Node.js, j'ai été frappé par sa simplicité d'installation et son écosystème de modules. \nDans cet article, je vous raconte mon parcours d'apprentissage et mes premières réussites."
-}
-```
+* **Remédiation :**
+  La clé secrète doit être une chaîne de caractères longue, complexe et aléatoire. Elle doit être stockée en dehors du code source, par exemple dans une **variable d'environnement**.
 
-pour résoudre cela il faut préparer la données et pas faire de concaténation direct 
+  **Exemple de correction :**
 
-```json
-const  article  =  await db.get(
-	"SELECT * FROM articles WHERE id = ? AND authorId = ?",
-	articleId,
-	userId,
-);
-```
+  ```javascript
+  // La clé est chargée depuis les variables d'environnement
+  app.use(session({
+      // ...
+      secret: process.env.SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+  }));
+  ```
 
+### 3.5. Absence de protection contre les attaques CSRF (Cross-Site Request Forgery)
 
+* **Cause :**
+  L'application ne met en œuvre aucun mécanisme de protection contre les attaques CSRF. Un attaquant pourrait héberger un site malveillant qui force le navigateur d'un utilisateur authentifié à exécuter des actions non désirées sur l'application (par exemple, supprimer un article, changer un mot de passe).
 
+* **Remédiation :**
+  Implémenter une protection basée sur des **tokens CSRF** (aussi appelés "jetons anti-falsification"). Le principe est de générer un token unique et secret pour chaque session utilisateur. Ce token doit être ajouté à toutes les requêtes qui modifient l'état de l'application (POST, PUT, DELETE). Le serveur valide ensuite la présence et la correction de ce token avant d'exécuter la requête.
 
-# Cors & Token CSRF
+  **Exemple d'implémentation avec `csurf` :**
 
-Erreur dans le code car tous les sites extérieure peuvent se connecter sur l'utilisateur déja connecté pour éviter : 
+  1. Installer les dépendances : `npm install cookie-parser csurf`
 
+  2. Configurer les middlewares dans l'application Express :
 
-`npm install cookie-parser`
-
-`npm install csurf `
-
-```json
-app.use(
-  csurf({
-    cookie: {
-      httpOnly: true,
+  ```javascript
+  import cookieParser from 'cookie-parser';
+  import csurf from 'csurf';
+  
+  // ...
+  
+  app.use(cookieParser());
+  
+  // Middleware csurf pour la protection CSRF
+  app.use(
+    csurf({
+      cookie: {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    })
+  );
+  
+  // Middleware pour rendre le token accessible au frontend via un cookie
+  app.use((req, res, next) => {
+    res.cookie('XSRF-TOKEN', req.csrfToken(), {
+      httpOnly: false, // Permet au JS côté client de le lire
       sameSite: 'strict',
       secure: process.env.NODE_ENV === 'production',
-    },
-  })
-);
-app.use((req, res, next) => {
-  res.cookie('XSRF-TOKEN', req.csrfToken(), {
-    httpOnly: false,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
+    });
+    next();
   });
-  next();
-});
-```
+  ```
 
-
-
+  Le frontend doit ensuite être configuré pour lire le token depuis le cookie `XSRF-TOKEN` et l'inclure dans un en-tête HTTP (ex: `X-CSRF-Token`) pour chaque requête sensible.
