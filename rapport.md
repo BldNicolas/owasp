@@ -22,6 +22,8 @@
 
 ### 3.1. Hashage du mot de passe
 
+---
+
 ### 3.2 XSS (cross-site scripting) sur le champ de recherche
 - **Localisation :**  `frontend/src/views/Home.vue`
 - **Preuve de concept :**
@@ -40,5 +42,26 @@ Résultats pour : {{ searchQueryRaw }}
 </p> 
 ```
   - Ne jamais utiliser v-html avec des entrées utilisateur, sauf si le contenu est filtré via une bibliothèque de sanitization comme DOMPurify.
+
+---
+
+### 3.3 XSS (cross-site scripting) dans le contenu d'un article
+- **Localisation :**  `frontend/src/views/Article.vue`
+- **Preuve de concept :**
+  1. Créer un article avec le contenu suivant :
+  ```html
+  <a href="#" onmouseover="alert('XSS')">Survole-moi</a>
+  ```
+  2. Aller sur la page de l’article : `http://localhost:8080/articles/:id`
+  3. Survoler le lien déclenche une alerte JavaScript.
+- **Cause :**  
+    - Utilisation de v-html pour afficher le contenu d’un article, sans nettoyage ou filtrage préalable.
+	- Cela permet à un utilisateur malveillant d’injecter du HTML ou du JavaScript exécutable dans la page.
+- **Remédiation :**  
+    - Supprimer l’usage de v-html et afficher le contenu via interpolation :
+```html
+<p>{{ article.content }}</p>
+```
+  - Cette méthode garantit que Vue.js échappe automatiquement tout contenu HTML dangereux.
 
 ---

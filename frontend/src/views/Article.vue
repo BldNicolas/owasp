@@ -1,7 +1,7 @@
 <template>
   <div v-if="article">
     <h1>{{ article.title }}</h1>
-    <p v-html="article.content"></p>
+    <p>{{ article.content }}</p>
     <router-link :to="{ name: 'EditArticle', params: { id }}">Edit</router-link>
   </div>
   <p v-else>Loading…</p>
