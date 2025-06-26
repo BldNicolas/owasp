@@ -13,10 +13,15 @@ export async function list(req: Request, res: Response): Promise<any> {
   res.json(articles);
 }
 
-
-export async function listAll(_req: Request, res: Response): Promise<any> {
-  const articles = await db.all('SELECT articles.*, users.username FROM articles LEFT JOIN users ON (articles.authorId = users.id)');
-  console.log("list_all");
+// Permet à l'admin de lister tous les articles de tout le monde
+export async function listAll(req: Request, res: Response): Promise<any> {
+  const user = req.session.user;
+  if (!user || user.role !== 'admin') {
+    return res.sendStatus(403);
+  }
+  const articles = await db.all(
+    'SELECT articles.*, users.username FROM articles LEFT JOIN users ON (articles.authorId = users.id)'
+  );
   res.json(articles);
 }
 
@@ -50,6 +55,11 @@ export async function get(req: Request, res: Response): Promise<any> {
 
 export async function modify(req: Request, res: Response): Promise<any> {
   const articleId = req.params.id;
+  const userId = req.session.user!.id;
+  const article = await db.get(`SELECT * FROM articles WHERE id = ?`, articleId);
+  if (!article || article.authorId !== userId) {
+    return res.sendStatus(403);
+  }
   const { title, content } = req.body;
   await db.run(
     `UPDATE articles SET title=?, content=? WHERE id=?`,
@@ -62,6 +72,11 @@ export async function modify(req: Request, res: Response): Promise<any> {
 
 export async function remove(req: Request, res: Response): Promise<any> {
   const articleId = req.params.id;
+  const userId = req.session.user!.id;
+  const article = await db.get(`SELECT * FROM articles WHERE id = ?`, articleId);
+  if (!article || article.authorId !== userId) {
+    return res.sendStatus(403);
+  }
   await db.run(
     'DELETE FROM articles WHERE id=?',
     articleId

@@ -20,7 +20,7 @@
 
 ## 3. Vulnérabilités Identifiées
 
-### 3.1. Hashage du mot de passe
+### 3.1. TODO: Hashage du mot de passe
 
 ---
 
@@ -63,5 +63,52 @@ Résultats pour : {{ searchQueryRaw }}
 <p>{{ article.content }}</p>
 ```
   - Cette méthode garantit que Vue.js échappe automatiquement tout contenu HTML dangereux.
+
+---
+
+### 3.4 TODO Préparer les requêtes SQL
+
+### 3.5 Broken Access Control 
+**3.4.1 Modifications et suppressions d'articles**
+- **Localisation :**  `backend/src/controllers/articles.ts`
+- **Preuve de concept :**
+    1.	L’utilisateur A (id = 1) se connecte et récupère un token/session.
+	2.	L’utilisateur B (id = 2) a créé un article avec id = 5.
+	3.	L’utilisateur A effectue la requête suivante :
+```
+PUT /articles/5
+{
+  "title": "modif non autorisée",
+  "content": "nouveau contenu"
+}
+```
+    4.	L’article de l’utilisateur B est modifié par A.
+- **Cause :**  
+    - Absence de contrôle d’autorisation dans les fonctions modify() et remove().
+	- Aucune vérification que l’article appartient à l’utilisateur authentifié (req.session.user.id) avant de modifier ou supprimer.
+- **Remédiation :**  
+    - Ajouter une vérification explicite dans chaque fonction pour s’assurer que l’article ciblé appartient bien à l’utilisateur :
+```ts
+const article = await db.get(`SELECT * FROM articles WHERE id = ?`, articleId);
+if (!article || article.authorId !== userId) {
+  return res.sendStatus(403);
+}
+```
+
+---
+**3.4.2 Accès à la route listAll()**
+- **Localisation :**  `backend/src/controllers/articles.ts`
+- **Preuve de concept :**
+    1.	Un utilisateur connecté (non admin) appelle `/articles/all`.
+	2.	Il obtient l'ensemble des articles, y compris ceux d'autres utilisateurs.
+- **Cause :**  
+    - Aucune vérification du rôle (user.role) avant d’exécuter la requête.
+- **Remédiation :**  
+    - Restreindre l’accès aux seuls utilisateurs admins :
+```ts
+if (!user || user.role !== 'admin') {
+  return res.sendStatus(403);
+}
+```
 
 ---
