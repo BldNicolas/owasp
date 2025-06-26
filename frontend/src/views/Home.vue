@@ -7,8 +7,7 @@
         <input id="searchInput" v-model="searchTerm" type="text" placeholder="Tapez votre recherche..." />
       </div>
     </form>
-    <p v-if="searchQueryRaw" class="search-results" v-html="`Résultats pour : ${searchQueryRaw}`"></p>
-
+    <p v-if="searchQueryRaw" class="search-results">Résultats pour : {{ searchQueryRaw }}</p>
     <ul class="article-list">
       <li v-for="a in filteredArticles" :key="a.id">
         <router-link :to="{ name: 'Article', params: { id: a.id } }">
