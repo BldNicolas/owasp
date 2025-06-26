@@ -19,11 +19,16 @@ import errorHandler from '@/middlewares/errorHandler';
 async function main() {
   const devPort = process.env.DEV_PORT;
   const httpsPort = process.env.HTTPS_PORT;
+  const cors = require("cors");
+  const csurf = require("csurf");
+  const cookieParser = require("cookie-parser");
+
 
   await initDb();
   const SQLiteStore = SQLiteStoreFactory(session) as (new (opts: any) => Store); // Problème de typage connect-sqlite
 
   const app = express();
+  app.use(cookieParser());
 
   app.use(cors({
     origin: process.env.NODE_ENV === 'production'
@@ -43,6 +48,27 @@ async function main() {
     saveUninitialized: false,
     name: 'session',
   }));
+
+  app.use(
+    csurf({
+      cookie: {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+      },
+    }),
+  );
+
+
+  app.use((req, res, next) => {
+    res.cookie("XSRF-TOKEN", req.csrfToken(), {
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: false,
+    });
+    next();
+  });
+
 
   app.use(express.json());
   app.use('/api/auth', authRoutes);
@@ -73,3 +99,4 @@ async function main() {
 }
 
 main().catch(console.error);
+

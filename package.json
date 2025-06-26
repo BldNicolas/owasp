@@ -19,6 +19,8 @@
     "concurrently": "^9.1.2"
   },
   "dependencies": {
-    "bcrypt": "^6.0.0"
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "csurf": "^1.11.0"
   }
 }
