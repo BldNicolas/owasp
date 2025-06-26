@@ -111,7 +111,7 @@ La méthodologie adoptée pour cet audit combine des analyses statiques et dynam
   ```
 
 * **Remédiation :**
-  Il faut **hasher** les mots de passe à l'aide d'un algorithme robuste et lent comme **bcrypt** ou **Argon2**. Le hash, et non le mot de passe, est ensuite stocké en base de données.
+  Il faut **hasher** les mots de passe à l'aide d'un algorithme robuste et lent comme **bcrypt**. Le hash, et non le mot de passe, est ensuite stocké en base de données.
 
   **Exemple de correction avec `bcrypt` :**
 
@@ -124,7 +124,6 @@ La méthodologie adoptée pour cet audit combine des analyses statiques et dynam
       return res.status(400).json({ error: 'Username and password are required' });
     }
     try {
-      // Hasher le mot de passe avec un coût de 10
       const hashedPassword = await bcrypt.hash(password, 10);
       await db.run(
         `INSERT INTO users (username, password, role) VALUES (?, ?, 'user')`,
@@ -151,7 +150,7 @@ La méthodologie adoptée pour cet audit combine des analyses statiques et dynam
   ```javascript
   app.use(session({
       // ...
-      secret: 'secret-key', // Clé faible et codée en dur
+      secret: 'secret-key',
       resave: false,
       saveUninitialized: false,
   }));
@@ -163,10 +162,8 @@ La méthodologie adoptée pour cet audit combine des analyses statiques et dynam
   **Exemple de correction :**
 
   ```javascript
-  // La clé est chargée depuis les variables d'environnement
   app.use(session({
-      // ...
-      secret: process.env.SESSION_SECRET,
+      secret: process.env.secret,
       resave: false,
       saveUninitialized: false,
   }));
@@ -190,11 +187,9 @@ La méthodologie adoptée pour cet audit combine des analyses statiques et dynam
   import cookieParser from 'cookie-parser';
   import csurf from 'csurf';
   
-  // ...
   
   app.use(cookieParser());
-  
-  // Middleware csurf pour la protection CSRF
+
   app.use(
     csurf({
       cookie: {
@@ -205,10 +200,9 @@ La méthodologie adoptée pour cet audit combine des analyses statiques et dynam
     })
   );
   
-  // Middleware pour rendre le token accessible au frontend via un cookie
   app.use((req, res, next) => {
     res.cookie('XSRF-TOKEN', req.csrfToken(), {
-      httpOnly: false, // Permet au JS côté client de le lire
+      httpOnly: false, 
       sameSite: 'strict',
       secure: process.env.NODE_ENV === 'production',
     });
