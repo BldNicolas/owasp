@@ -1,15 +1,30 @@
 import { db } from '@/database';
 import { Request, Response } from 'express';
+import bcrypt from "bcrypt";
 
 // Inscription
 export async function register(req: Request, res: Response): Promise<any> {
   const { username, password } = req.body;
-  await db.run(
-    `INSERT INTO users (username, password, role) VALUES (?, ?, 'user')`,
-    username, password
-  );
-  res.status(201).json({ message: 'User registered' });
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await db.run(
+      `INSERT INTO users (username, password, role) VALUES (?, ?, 'user')`,
+      username,
+      hashedPassword
+    );
+    res.status(201).json({ message: 'User registered' });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 }
+
+
 
 // Connexion
 export async function login(req: Request, res: Response): Promise<any> {
